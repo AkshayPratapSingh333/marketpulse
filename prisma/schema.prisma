@@ -1,0 +1,219 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id                    String   @id @default(cuid())
+  productId             String?  @unique
+  productName           String?  @db.Text
+  category              String?  @db.Text
+  discountedPrice       Float?
+  actualPrice           Float?
+  discountPercentage    Float?
+  rating                Float?
+  ratingCount           Int?
+  about                 String?  @db.Text
+  userId                String?  @db.Text
+  userName              String?  @db.Text
+  userReview            String?  @db.Text
+  reviewTitle           String?  @db.Text
+  img_link              String?  @db.Text
+  product_link          String?  @db.Text
+  
+  // Computed fields for analysis
+  priceRange            String?
+  meanRating            Float?
+  productCount          Int?
+  averageRatingCount    Float?
+  
+  // Sentiment analysis results
+  sentimentScore        Float?
+  sentimentLabel        String?  // 'positive', 'negative', 'neutral'
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  recommendations       ProductRecommendation[] @relation("RecommendedProduct")
+  sourceRecommendations ProductRecommendation[] @relation("SourceProduct")
+  sentimentAnalyses     SentimentAnalysis[]
+  
+  @@map("products")
+}
+
+model ProductRecommendation {
+  id                String  @id @default(cuid())
+  sourceProductId   String
+  recommendedProductId String
+  similarity        Float   // Similarity score
+  reason            String? // Why this product is recommended
+  
+  sourceProduct     Product @relation("SourceProduct", fields: [sourceProductId], references: [id])
+  recommendedProduct Product @relation("RecommendedProduct", fields: [recommendedProductId], references: [id])
+  
+  createdAt         DateTime @default(now())
+  
+  @@unique([sourceProductId, recommendedProductId])
+  @@map("product_recommendations")
+}
+
+model SentimentAnalysis {
+  id            String   @id @default(cuid())
+  productId     String
+  reviewText    String   @db.Text
+  sentimentScore Float   // -1 to 1 scale
+  sentimentLabel String  // 'positive', 'negative', 'neutral'
+  confidence    Float    // Confidence score
+  keywords      Json?    // Extracted keywords
+  
+  product       Product  @relation(fields: [productId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("sentiment_analyses")
+}
+
+model CategoryInsight {
+  id                String   @id @default(cuid())
+  category          String   @unique
+  totalProducts     Int
+  averageRating     Float
+  averagePrice      Float
+  averageDiscount   Float
+  topRatedProduct   String?  @db.Text
+  insightsData      Json?    // Store additional insights as JSON
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("category_insights")
+}
+
+model TrendAnalysis {
+  id            String   @id @default(cuid())
+  analysisType  String   // 'daily', 'weekly', 'monthly', 'category', 'product'
+  period        String   // Date or period identifier
+  category      String?
+  productId     String?
+  
+  metrics       Json     // Store trend metrics as JSON
+  // Example metrics structure:
+  // {
+  //   "salesCount": 150,
+  //   "averageRating": 4.2,
+  //   "averagePrice": 1200,
+  //   "topProducts": [...],
+  //   "growthRate": 5.2
+  // }
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("trend_analyses")
+}
+
+model ETLJobLog {
+  id            String    @id @default(cuid())
+  fileName      String
+  status        String    // 'started', 'processing', 'completed', 'failed'
+  recordsProcessed Int    @default(0)
+  recordsSuccess   Int    @default(0)
+  recordsError     Int    @default(0)
+  errorMessages    Json?
+  
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  duration      Int?      // Duration in seconds
+  
+  @@map("etl_job_logs")
+}
+
+model AIInsight {
+  id            String   @id @default(cuid())
+  insightType   String   // 'trend', 'recommendation', 'sentiment', 'correlation'
+  title         String
+  description   String   @db.Text
+  data          Json     // Store insight data as JSON
+  confidence    Float    // AI confidence score
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("ai_insights")
+}
+
+// Authentication Models
+enum Role {
+  USER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("sessions")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Indexes for better query performance
+// These are automatically created for foreign keys and unique fields
+// Additional indexes can be added as needed:
+
+// @@index([category])
+// @@index([rating])
+// @@index([discountedPrice])
+// @@index([actualPrice])
+// @@index([createdAt])
